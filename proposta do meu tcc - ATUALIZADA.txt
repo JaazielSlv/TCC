@@ -1,0 +1,417 @@
+TÍTULO: Análise de Viabilidade de um Sistema de Detecção de Intrusão (IDS) Baseado em Aprendizado de Máquina para Roteadores de Borda
+
+AUTOR: [Seu Nome]
+INSTITUIÇÃO: Instituto Federal de Educação, Ciência e Tecnologia da Paraíba (IFPB) - Campus João Pessoa
+
+=============================================================================
+RESUMO
+=============================================================================
+A crescente ameaça de ataques de rede direcionados a dispositivos de Internet das Coisas (IoT) e infraestruturas de pequeno porte ressalta a urgência de métodos de detecção na borda da rede (Edge Computing). Roteadores domésticos e de pequenas empresas possuem recursos computacionais limitados, tornando inviável a execução de Sistemas de Detecção de Intrusão (IDS) tradicionais baseados em Inspeção Profunda de Pacotes (DPI), especialmente diante da onipresença do tráfego criptografado. 
+
+Este trabalho propõe a pesquisa de viabilidade de um framework de detecção baseado em aprendizado de máquina (Machine Learning) otimizado para hardware restrito. A abordagem utiliza análise baseada em fluxos de rede (Flow-based) aliada a técnicas de Seleção de Características (Feature Importance) para reduzir o custo computacional. A metodologia engloba a orquestração de um laboratório automatizado com Vagrant para geração de tráfego (benigno e malicioso em múltiplas categorias), extração de métricas comportamentais e avaliação comparativa entre Decision Tree e Naive Bayes quanto ao tempo de inferência, acurácia e consumo de recursos em ambiente de borda.
+
+=============================================================================
+1. INTRODUÇÃO
+=============================================================================
+A arquitetura de redes moderna tem descentralizado o processamento, empurrando serviços para a borda (Edge Computing). No entanto, a segurança na borda continua sendo um gargalo técnico. Roteadores de pequeno e médio porte atuam como a principal barreira de defesa, mas são equipados com processadores (geralmente arquiteturas ARM ou MIPS) que não suportam a carga computacional de firewalls corporativos avançados. 
+
+Paralelamente, a evolução dos ataques cibernéticos e a criptografia padrão da web (TLS 1.3) tornaram os sistemas clássicos de detecção baseados em assinaturas obsoletos. Se um roteador tentar ler o conteúdo de pacotes para procurar anomalias, ocorrerá o esgotamento imediato da CPU, introduzindo latência inaceitável na rede. Diante desse cenário, a Inteligência Artificial, especificamente o Aprendizado de Máquina, surge como uma alternativa viável para analisar o comportamento do tráfego sem inspecionar sua carga útil.
+
+=============================================================================
+2. JUSTIFICATIVA E TRABALHOS RELACIONADOS
+=============================================================================
+A eficácia do Aprendizado de Máquina na detecção de ataques de rede já é comprovada na literatura recente. Soluções robustas utilizam frameworks baseados em grandes volumes de dados (Big Data) [cite: 11], executando análises complexas em ambientes com amplo poder de processamento, como o Apache Spark, para mitigar ataques na camada de aplicação[cite: 191]. Tais pesquisas demonstram ganhos expressivos de eficiência e precisão ao aplicarem técnicas de Feature Importance[cite: 13, 386].
+
+O presente projeto justifica-se por explorar o extremo oposto dessa infraestrutura: a escassez de recursos. Enquanto ambientes de Big Data processam logs massivos em servidores dedicados, este trabalho investiga como otimizar a mesma lógica de inteligência artificial para que atue de forma autônoma na memória e CPU limitadas de um roteador. A adoção de métricas focadas em fluxos (Flow-based) e a seleção das características mais críticas são passos fundamentais para viabilizar a segurança inteligente sem comprometer o roteamento de pacotes.
+
+Adicionalmente, o foco em detecção MULTICLASSE (múltiplos tipos de ataque com um único modelo) diferencia esta pesquisa, tornando-a mais próxima de cenários reais onde diversas ameaças coexistem na mesma rede.
+
+=============================================================================
+3. OBJETIVOS
+=============================================================================
+3.1. Objetivo Geral
+Analisar a viabilidade técnica e o impacto no desempenho da implementação de um modelo leve de Inteligência Artificial atuando como um IDS (Sistema de Detecção de Intrusão) multiclasse diretamente em um ambiente com recursos limitados (simulando um roteador de borda), utilizando análise baseada em fluxos de rede e comparação entre algoritmos otimizados.
+
+3.2. Objetivos Específicos
+* Desenvolver um ambiente de laboratório isolado e automatizado utilizando Vagrant para orquestrar 4 máquinas virtuais (cliente legítimo externo, atacante externo, roteador+IDS interno, servidor alvo interno) garantindo reprodutibilidade dos testes.
+
+* Gerar um dataset próprio capturando tráfego benigno e ataques maliciosos específicos (SYN Flood, Port Scanning, Brute Force SSH, UDP Flood opcional) em ciclos curtos (30-45 minutos cada), evitando o requisito de deixar computador ligado continuamente.
+
+* Realizar extração de métricas de fluxo (Flow-based) com tcpdump/Zeek e aplicar técnicas de Seleção de Características (Feature Importance) para reduzir de ~50 métricas para ~15 características críticas necessárias para classificação.
+
+* Treinar e comparar dois algoritmos de Machine Learning (Decision Tree e Naive Bayes) com foco em tempo de inferência, precisão, consumo de memória e comportamento em ambiente multiclasse.
+
+* Avaliar viabilidade técnica baseada em critérios equilibrados: Acurácia ≥ 85%, Falsos Positivos < 5%, Tempo de Inferência < 10ms, Consumo de Memória < 50MB, CPU Overhead < 15%.
+
+=============================================================================
+4. FUNDAMENTAÇÃO TEÓRICA E METODOLOGIA
+=============================================================================
+A metodologia divide-se em Quatro Fases principais:
+
+FASE 1: INFRAESTRUTURA E ORQUESTRAÇÃO DE TRÁFEGO
+================================================
+
+Arquitetura do Cenário (Simulação Realista):
+
+     [CLIENTE EXTERNO 1]      [CLIENTE EXTERNO 2]    
+     (Tráfego Legítimo)       (Atacante)
+          |                         |
+          | TCP/UDP Benigno        | SYN Flood / Port Scan
+          | HTTP, HTTPS, DNS       | Brute Force SSH
+          | (simultâneo)           | (simultâneo)
+          |                         |
+          +----------------------+-+---+
+                                  |
+                         Internet
+                                  |
+          +-----------------------+-----------+
+          |                                   |
+          V [ROTEADOR/IDS]                   
+     (Sniffer ativo aqui)                    
+     - Captura em .pcap                      
+     - Extrai features em tempo real         
+     - Executa modelo ML (<10ms)             
+     - Gera alertas/bloqueios                
+          |                                   
+     +----+-----+                           
+     |          |                            
+     V          V                            
+ CLIENTE_INT  SERVIDOR                      
+(protegido)  (alvo: SSH/HTTP)              
+
+A geração de dados ocorrerá em ciclos controlados construídos via Vagrant. O arquivo Vagrantfile provisiona 4 nós:
+
+* Cliente Legítimo (EXTERNO): Gera HTTP, HTTPS, DNS, ICMP normais. Simula navegação e downloads reais. ~1-2h/dia dedicadas.
+
+* Cliente Atacante (EXTERNO): Injeta ataques específicos em janelas curtas (30-45 min). SYN Floods, Port Scans, Brute Force SSH.
+
+* Roteador/Gateway com IDS (INTERNO): Captura tráfego passante em .pcap, extrai features de fluxos, executa modelo ML em tempo real (<10ms por fluxo).
+
+* Servidor Alvo (INTERNO): HTTP (porta 80) e SSH (porta 22) ativados para testes de ataque.
+
+IMPORTANTE: Ambos os clientes externos rodam SIMULTANEAMENTE durante a validação em tempo real para simular uma rede real.
+
+Cada ciclo dura 30-45 minutos, capturando ~500-1000 amostras de um tipo de ataque. Sem exigência de computador ligado continuamente.
+
+FASE 2: EXTRAÇÃO DE CARACTERÍSTICAS BASEADA EM FLUXOS (FLOW-BASED)
+==================================================================
+
+Para evitar Inspeção Profunda de Pacotes (DPI), o tráfego bruto será convertido em fluxos de rede. Uma "flow" é definida por: (IP_origem, IP_destino, Porta_origem, Porta_destino, Protocolo).
+
+Exemplos de métricas extraídas (redução de ~50 para ~15):
+
+    Métricas de Tempo:
+    └─ Inter-Arrival Time (tempo entre chegadas de pacotes)
+    └─ Duração total do fluxo
+    └─ Tempo médio entre pacotes
+
+    Métricas de Volume:
+    └─ Total de pacotes no fluxo
+    └─ Tamanho médio dos pacotes
+    └─ Desvio padrão do tamanho
+    └─ Bytes por segundo
+
+    Métricas Comportamentais:
+    └─ Contagem de Flags TCP (SYN, ACK, RST, FIN)
+    └─ Portas únicas visitadas
+    └─ Taxa de sucesso de conexões
+
+Ferramentas: tcpdump para capturar .pcap, depois converter com Zeek/Suricata para formato tabulado (CSV).
+
+FASE 3: SELEÇÃO DE CARACTERÍSTICAS (FEATURE SELECTION)
+=======================================================
+
+Um extrator padrão gera 40-50 métricas, o que inviabiliza processamento em tempo real no roteador (~200ms de latência).
+
+Nesta etapa será aplicada:
+1. Análise de Correlação de Pearson (remover features redundantes)
+2. Teste de importância com Decision Tree (identificar features discriminatórias)
+3. Teste de chi-square para variáveis categóricas
+
+Objetivo: Reduzir para ~15 features mainores que mantêm >90% do poder discriminatório.
+
+Exemplo resultado:
+    Feature                      | Importância
+    ─────────────────────────────┼────────────
+    SYN_flags_count              | 0.28
+    Pacotes_por_segundo          | 0.25
+    Portas_diferentes            | 0.18
+    ACK_flags_count              | 0.12
+    Media_tamanho_pacote         | 0.08
+    ... (10 mais selecionadas)   |
+
+FASE 4: TREINAMENTO E ANÁLISE COMPARATIVA DE MODELOS
+=====================================================
+
+Comparação Decision Tree vs Naive Bayes:
+
+┌─────────────────────────────────────────────────────┐
+│ DECISION TREE (Algoritmo Principal)                 │
+├─────────────────────────────────────────────────────┤
+│ Acurácia esperada:  88-92%          ✅ Muito Bom  │
+│ Tempo/inferência:   2-5ms           ✅ Rápido     │
+│ Memória:            ~200KB           ✅ Leve       │
+│ Multiclasse:        Excelente        ✅ Ideal  4+ │
+│ Interpretabil.:     Alta             ✅ Explicável│
+│                                                    │
+│ Por que bom? Árvores de decisão fazem divisões    │
+│ binárias simples (IF/ELSE), sem operações custosas.│
+│ Multiclasse é nativo (não usa one-vs-rest).       │
+└─────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────┐
+│ NAIVE BAYES (Algoritmo Comparativo)                 │
+├─────────────────────────────────────────────────────┤
+│ Acurácia esperada:  80-85%          ⚠️  Aceitável│
+│ Tempo/inferência:   0.5ms           ✅ Ultra-rápido
+│ Memória:            ~50KB            ✅ Mínima    │
+│ Multiclasse:        Bom, -5% acur.  ⚠️  Piora um |
+│ Interpretabil.:     Baixa            ⚠️  Caixa preta
+│                                                    │
+│ Por que comparar? Naive Bayes é ainda mais leve,  │
+│ valida se complexidade é realmente necessária.    │
+└─────────────────────────────────────────────────────┘
+
+RECOMENDAÇÃO: Decision Tree é a escolha principal dado o requisito de multiclasse. Naive Bayes é backup se for necessário ultra-minimizar latência.
+
+Treinamento:
+- Ambiente: PC do pesquisador com Python 3.9+, pandas, scikit-learn
+- Dataset: ~2500 amostras (80% treino, 20% teste)
+- Métricas avaliadas: Acurácia global, Precision por classe, Recall, F1-Score, Confusion Matrix
+- Classes: 0=Benigno, 1=SYN_FLOOD, 2=PORT_SCAN, 3=BRUTE_FORCE
+
+Exportação: Modelo treinado será salvo em formato .pkl (pickle) ou ONNX para máxima compatibilidade.
+
+Teste Final: Modelo embarcado na VM Roteador roda contra tráfego simultâneo (cliente legítimo + atacante) para validação real.
+
+=============================================================================
+5. ATAQUES SIMULADOS - TIPOS E CARACTERÍSTICAS
+=============================================================================
+
+O projeto focará em 4 tipos principais de ataque, representando ~80% dos ataques reais na borda:
+
+TIPO 1: SYN FLOOD (DoS Volumétrico)
+───────────────────────────────────────
+
+Ferramenta:          hping3 / stress-ng
+Duração geração:     30 minutos
+Detectabilidade:     Fácil ✅
+
+Padrão observado (features):
+  └─ Pacotes/segundo > 1000
+  └─ Flags SYN > 800 em fluxo
+  └─ Flags ACK muito baixo (< 10)
+  └─ Mesma porta alvo repetida
+  └─ Mesma origem IP (atacante)
+
+Exemplo comando:
+  hping3 -S -p 80 -i u1 --flood 192.168.1.20
+
+TIPO 2: PORT SCANNING (Reconnaissance)
+────────────────────────────────────────
+
+Ferramenta:          Nmap (-sS) / Zmap
+Duração geração:     15 minutos
+Detectabilidade:     Fácil ✅
+
+Padrão observado (features):
+  └─ Portas diferentes > 50 em curto tempo
+  └─ SYN seguido de RST (rejeição)
+  └─ Sequência ordenada/aleatória de portas
+  └─ Duração muito curta por fluxo (< 1s)
+  └─ Múltiplas tentativas de conexão
+
+Exemplo comando:
+  nmap -sS -p 1-1000 -T4 192.168.1.20
+
+TIPO 3: BRUTE FORCE SSH (Credential Attack)
+──────────────────────────────────────────────
+
+Ferramenta:          Hydra / Paramiko
+Duração geração:     45 minutos
+Detectabilidade:     Médio ⚠️
+
+Padrão observado (features):
+  └─ Falhas de conexão repetidas na porta 22
+  └─ Mesma origem IP, múltiplas tentativas
+  └─ Sequência rápida de conexões falhadas
+  └─ Variação em taxa de pacotes (backoff)
+  └─ Duração longa (tentativas)
+
+Exemplo comando:
+  hydra -l admin -P wordlist.txt -t 4 ssh://192.168.1.20
+
+TIPO 4: UDP FLOOD (DoS alternativo) - OPCIONAL
+────────────────────────────────────────────────
+
+Ferramenta:          hping3 (-2) / Scapy / netcat
+Duração geração:     20 minutos
+Detectabilidade:     Fácil ✅
+
+Padrão observado (features):
+  └─ Pacotes UDP > 2000/sec para porta alvo
+  └─ Tamanho de payload muito uniforme
+  └─ Origem e destino fixos e repetidos
+  └─ Sem resposta ICMP (descarte)
+
+Exemplo comando:
+  hping3 -2 -p 53 -i u1 --flood 192.168.1.20
+
+=============================================================================
+6. ESTRUTURA E GERAÇÃO DO DATASET PRÓPRIO
+=============================================================================
+
+Dataset em Ciclos Curtos
+(NÃO requer computador ligado 3-4 semanas seguidas!)
+
+CRONOGRAMA:
+
+Semana 1-2: TRÁFEGO LEGÍTIMO (~500 amostras)
+─────────────────────────────────────────────
+  └─ Cliente Legítimo rodando 1-2h/dia (não contínuo)
+  └─ Tráfego: HTTP, HTTPS, DNS, ICMP, downloads
+  └─ Capturado em: dataset_benigno_v1.csv
+  └─ Total horas máquina: ~10 horas espaçadas
+
+Semana 3: SYN FLOOD (~800 amostras)
+────────────────────────────────────
+  └─ hping3 -S -p 80 -i u1 --flood 192.168.1.20
+  └─ Duração: 30 minutos ininterruptos
+  └─ Capturado em: dataset_synflood.csv
+  └─ Total horas máquina: 0.5 horas
+
+Semana 4: PORT SCANNING (~600 amostras)
+────────────────────────────────────────
+  └─ nmap -sS -p 1-1000 -T4 192.168.1.20
+  └─ Duração: 15 minutos ininterruptos
+  └─ Capturado em: dataset_portscan.csv
+  └─ Total horas máquina: 0.25 horas
+
+Semana 5: BRUTE FORCE SSH (~500 amostras)
+──────────────────────────────────────────
+  └─ hydra -l admin -P wordlist.txt -t 4 ssh://192.168.1.20
+  └─ Duração: 45 minutos ininterruptos
+  └─ Capturado em: dataset_bruteforce.csv
+  └─ Total horas máquina: 0.75 horas
+
+CONSOLIDAÇÃO FINAL (~2500 amostras):
+────────────────────────────────────
+  └─ Combinar todos: dataset_final.csv
+  └─ Adicionar labels:
+     └─ 0 = Benigno
+     └─ 1 = SYN_FLOOD
+     └─ 2 = PORT_SCAN
+     └─ 3 = BRUTE_FORCE
+  
+  └─ OPCIONAL: Complementar com 20% de dados UNSW-NB15
+     (se necessário aumentar dataset para > 5000 amostras)
+
+┌─ RESUMO ESFORÇO ──────────────────────┐
+│ Total de experimentos: ~11 horas      │
+│ (distribuído ao longo de 6 semanas)   │
+│ Sem exigência de máquina ligada 24/7  │
+└───────────────────────────────────────┘
+
+=============================================================================
+7. RESULTADOS ESPERADOS E CRITÉRIO DE VIABILIDADE
+=============================================================================
+
+A viabilidade NÃO será definida por um único valor absoluto, mas por um EQUILÍBRIO entre acurácia e eficiência.
+
+┌─ MÉTRICAS DE AVALIAÇÃO ──────────────────────────────┐
+│                                                      │
+│ Métrica              │ Mínimo  │ Esperado           │
+│ ─────────────────────┼─────────┼────────────────── │
+│ Acurácia Global      │ 85%     │ 88-92%            │
+│ Precision (média)    │ 90%     │ 92-96%            │
+│ Recall (por classe)  │ 80%     │ 85-90%            │
+│ Falsos Positivos     │ < 5%    │ 2-4%              │
+│ Tempo Inferência     │ < 50ms  │ 2-10ms            │
+│ Memória Modelo       │ < 100MB │ 50-300KB          │
+│ CPU Overhead Roteador│ suportável │ < 15% pico    │
+│                                                      │
+└──────────────────────────────────────────────────────┘
+
+┌─ CRITÉRIO FINAL DE VIABILIDADE ──────────────────────┐
+│                                                      │
+│ ✅ SIM - VIÁVEL                                     │
+│    Todos os 7 critérios atingidos simultaneamente.  │
+│    Modelo funciona em Edge Computing com baixo      │
+│    overhead e alta confiabilidade.                  │
+│                                                      │
+│    Resultado esperado: Decision Tree alcança        │
+│    88%+ acurácia com <5ms inferência.              │
+│                                                      │
+│ ⚠️  PARCIALMENTE VIÁVEL                              │
+│    5-6 critérios atingidos, alguns trade-offs.      │
+│    Solução funciona mas com limitações aceitáveis.  │
+│                                                      │
+│    Exemplo: 86% acurácia mas 15ms inferência.      │
+│    Ou: 92% acurácia mas 8% falsos positivos.       │
+│                                                      │
+│ ❌ NÃO VIÁVEL                                        │
+│    Menos de 5 critérios atingidos OU falhas        │
+│    críticas (ex: acurácia < 85% OU tempo > 100ms). │
+│                                                      │
+└──────────────────────────────────────────────────────┘
+
+CONCLUSÕES ESPERADAS:
+
+Ao final da pesquisa, será demonstrado que:
+
+1. Um modelo de Aprendizado de Máquina LEVE (< 1MB em tamanho)
+   pode rodar de forma CONTÍNUA e SEM INTERRUPÇÃO na borda de rede,
+
+2. Detectando MÚLTIPLAS CLASSES DE ATAQUE simultaneamente
+   (SYN Flood, Port Scanning, Brute Force, UDP Flood),
+
+3. Em TEMPO REAL (latência < 10ms por fluxo),
+
+4. Sem COMPROMETER o roteamento normal de pacotes legítimos
+   (overhead CPU < 15%),
+
+5. Mantendo LATÊNCIA ACEITÁVEL para operação normal da rede
+   (< 50ms adicionais pré-detecção).
+
+Portanto, Edge Computing com Inteligência Artificial é VIÁVEL para cenários
+de roteadores de pequeno porte e IoT, desde que convenientemente otimizado
+via Feature Selection e algoritmos apropriados.
+
+=============================================================================
+8. TIMELINE E CRONOGRAMA
+=============================================================================
+
+Abril 2026:
+  └─ Refinamento de proposta com orientador
+  
+Maio 2026:
+  └─ Setup Vagrant + Testes básicos de rede
+  
+Junho 2026:
+  └─ Início captura dataset (Semanas 1-2: tráfego benigno)
+  
+Julho 2026:
+  └─ Captura ataques (Semanas 3-5: SYN, Scan, SSH)
+  └─ Consolidação dataset (Semana 6)
+  
+Agosto 2026:
+  └─ Feature Extraction e Selection
+  └─ Préprocessamento dados
+  
+Setembro 2026:
+  └─ Treinamento Decision Tree
+  └─ Treinamento Naive Bayes
+  └─ Comparação resultados
+  
+Outubro 2026:
+  └─ Testes finais em tempo real
+  └─ Documentação de resultados
+  
+Novembro 2026:
+  └─ Redação do TCC final
+  └─ Preparação apresentação
+  
+Dezembro 2026:
+  └─ Apresentação para banca
+
+Total: 8 meses, timeline confortável para trabalho de qualidade.
