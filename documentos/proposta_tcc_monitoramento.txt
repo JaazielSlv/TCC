@@ -1,0 +1,223 @@
+TÍTULO: Desenvolvimento de um Sistema de Detecção de Intrusão Baseado em Machine Learning para Monitoramento e Notificação em Rede Local
+
+AUTOR: [Seu Nome]
+INSTITUIÇÃO: Instituto Federal de Educação, Ciência e Tecnologia da Paraíba (IFPB) - Campus João Pessoa
+
+=============================================================================
+RESUMO
+=============================================================================
+A segurança de redes locais e de borda tem se tornado um tema cada vez mais relevante, principalmente diante do aumento de ataques direcionados a roteadores, servidores e dispositivos conectados em redes domésticas e pequenas empresas. Em muitos cenários, a infraestrutura de rede possui recursos limitados e não suporta soluções de segurança pesadas, como IDSs tradicionais baseados em inspeção profunda de pacotes e análise de conteúdo completo. Nesse contexto, surge a necessidade de mecanismos mais leves, automatizados e focados na análise comportamental do tráfego.
+
+Este trabalho propõe o desenvolvimento de um Sistema de Detecção de Intrusão (IDS) baseado em aprendizado de máquina para monitorar e identificar atividades maliciosas em um ambiente controlado de rede. A proposta será implementada em um laboratório automatizado com Vagrant e Ansible, composto por cinco máquinas virtuais: um cliente normal, um cliente atacante, um cliente normal 2 protegido pelo roteador, um roteador e um servidor. A metodologia consiste em gerar tráfego legítimo e malicioso em um cenário realista, extrair métricas de rede por fluxo, treinar um modelo de Decision Tree e avaliar sua capacidade de distinguir tráfego normal de tráfego suspeito.
+
+Diferente de um IDS de bloqueio imediato, a proposta tem como foco principal o monitoramento e a notificação de incidentes, visando alertar o administrador sobre ataques em tempo real, sem priorizar a ação automática de bloqueio. A solução será desenvolvida de forma acessível e reproduzível, com uso de um dataset gerado a partir do próprio cenário de testes, permitindo que o modelo aprenda padrões específicos do laboratório e seja avaliado em condições reais de operação.
+
+=============================================================================
+1. INTRODUÇÃO
+=============================================================================
+A crescente dependência de redes locais e serviços conectados à Internet exige mecanismos de segurança cada vez mais eficientes e automatizados. Muitas redes pequenas e de borda não possuem infraestrutura adequada para suportar soluções pesadas de prevenção e detecção de intrusão, especialmente em dispositivos com limites de processamento, memória e energia. Nessa situação, a análise do comportamento do tráfego torna-se uma alternativa promissora, pois pode indicar padrões de ataques sem exigir inspeção detalhada do conteúdo dos pacotes.
+
+O avanço dos ataques cibernéticos, como varreduras de portas, floods de SYN e tentativas de força bruta, evidencia a necessidade de ferramentas que consigam identificar comportamentos maliciosos de forma rápida e com baixo custo computacional. Nesse cenário, o Aprendizado de Máquina surge como uma abordagem útil para classificar fluxos de rede com base em métricas estatísticas e comportamentais, como número de pacotes, duração do fluxo, flags TCP, tempo entre pacotes e volume de dados transmitidos.
+
+Além disso, a proposta do presente trabalho não tem como principal objetivo bloquear imediatamente o tráfego malicioso, mas sim monitorar o ambiente, detectar as ocorrências suspeitas e notificar o administrador. Essa abordagem é especialmente interessante para ambientes acadêmicos, laboratoriais e pequenos produtores, em que o foco inicial é a visibilidade e a resposta consciente, e não necessariamente a ação automática de bloqueio.
+
+=============================================================================
+2. JUSTIFICATIVA
+=============================================================================
+O tema desta pesquisa é relevante para a área de redes de computadores, pois aborda diretamente questões de segurança, monitoramento e análise de tráfego em ambientes com recursos limitados. O uso de um IDS leve, baseado em Machine Learning, pode contribuir para a identificação de ataques sem comprometer o desempenho da rede e sem exigir infraestrutura de alto custo.
+
+A literatura apresenta diversas soluções de detecção de intrusão baseadas em datasets públicos e em arquiteturas robustas, porém muitas delas não refletem ambientes reais de pequena rede. Dessa forma, este projeto propõe uma abordagem prática e reproduzível, utilizando um cenário controlado gerado no próprio laboratório. O uso de um dataset produzido a partir do ambiente de teste permite que o modelo aprenda padrões específicos do cenário, melhorando a relevância da análise para a rede em questão.
+
+Além disso, a proposta se diferencia por sua abordagem de monitoramento e notificação. Em vez de priorizar a contenção automática, ela enfatiza a detecção de comportamentos maliciosos e a geração de alertas para o administrador da rede. Isso torna a solução mais acessível, mais didática e mais adequada para um projeto acadêmico de graduação.
+
+=============================================================================
+3. OBJETIVOS
+=============================================================================
+3.1. Objetivo Geral
+Desenvolver e avaliar um Sistema de Detecção de Intrusão baseado em Machine Learning para monitorar e notificar ataques em uma rede local simulada, com foco exclusivo no monitoramento e na geração de alertas, utilizando a geração de dataset próprio e um modelo de Decision Tree.
+
+3.2. Objetivos Específicos
+* Construir um ambiente automatizado de laboratório com Vagrant e Ansible, composto por cinco máquinas virtuais: cliente normal, cliente atacante, cliente normal 2 protegido pelo roteador, roteador e servidor.
+
+* Simular tráfego legítimo e tráfego malicioso em cenários controlados, incluindo ataques como SYN Flood, Port Scan e Brute Force SSH.
+
+* Capturar pacotes de rede com ferramentas como tcpdump e, quando necessário, utilizar Zeek ou estruturas de extração de fluxo para gerar dados de treinamento.
+
+* Extrair métricas comportamentais dos fluxos de rede, como volume de pacotes, duração do fluxo, flags TCP, taxa de envio e padrões de conexão.
+
+* Criar um dataset próprio com dados gerados no ambiente de testes, reduzindo dependência de bases públicas e tornando o modelo mais específico ao cenário analisado.
+
+* Treinar e avaliar um algoritmo Decision Tree para classificar fluxos como benignos ou maliciosos.
+
+* Implementar a lógica de monitoramento e notificação do IDS, com alertas para o administrador quando houver comportamento suspeito, sem foco em bloqueio automático.
+
+* Analisar a viabilidade da solução com base em métricas como acurácia, precisão, recall, F1-score e tempo de análise.
+
+=============================================================================
+4. FUNDAMENTAÇÃO TEÓRICA E METODOLOGIA
+=============================================================================
+A metodologia deste trabalho será organizada em cinco etapas principais:
+
+FASE 1: INFRAESTRUTURA E ORQUESTRAÇÃO DO LABORATÓRIO
+=======================================================
+
+O ambiente será montado utilizando Vagrant e Ansible para automatizar a criação e configuração de cinco máquinas virtuais em rede local. A arquitetura proposta será a seguinte:
+
+     [CLIENTE NORMAL]       [CLIENTE ATACANTE]
+            |                       |
+            |-- tráfego normal ---->|
+            |                       |
+            +-----------------------+
+                         |
+                         V
+                 [ROTEADOR / IDS]
+                         |
+        +----------------+----------------+
+        |                                 |
+        V                                 V
+  [CLIENTE NORMAL 2 - ALVO]        [SERVIDOR ALVO]
+
+As máquinas terão as seguintes funções:
+
+* Cliente Normal: gera tráfego legítimo, como navegação, acesso a serviços web e comunicação simples.
+
+* Cliente Atacante: executa ataques específicos na rede, como varredura de portas e ataques de DoS.
+
+* Cliente Normal 2: atua como cliente alvo protegido pelo roteador, representando um host interno da rede que recebe o tráfego e também pode gerar comunicação legítima durante os testes.
+
+* Roteador: atua como gateway da rede e será responsável por capturar o tráfego de entrada e saída, além de receber o IDS para análise do comportamento do tráfego.
+
+* Servidor: disponibiliza serviços que serão alvo de ataques, como HTTP e SSH.
+
+A automação com Vagrant e Ansible permite replicar rapidamente o laboratório e reduzir erros manuais durante a criação e execução do cenário.
+
+FASE 2: GERAÇÃO DE TRÁFEGO E COLETA DE DADOS
+==============================================
+
+A coleta de dados será realizada no próprio ambiente simulado. O tráfego legítimo será gerado por um cliente normal, enquanto o tráfego malicioso será produzido por um ou mais clientes atacantes. A captura de pacotes será feita em momentos específicos para permitir a criação de um dataset balanceado e controlado.
+
+Serão utilizados cenários com diferentes condições de rede, incluindo:
+
+* tráfego normal sem ataques;
+* ataques de varredura de portas;
+* ataques de inundação SYN;
+* tentativas de brute force em SSH.
+
+A arquitetura de coleta será baseada em pacotes capturados em .pcap e posteriormente convertidos em fluxo de rede, permitindo a extração de características relevantes para a classificação.
+
+FASE 3: EXTRAÇÃO DE CARACTERÍSTICAS
+===================================
+
+Para reduzir a dependência de inspeção profunda de pacotes, a solução usará métricas baseadas em fluxo. Uma flow será definida por par de origem e destino, portas envolvidas e protocolo usado. As principais métricas que serão extraídas incluem:
+
+* número total de pacotes por fluxo;
+* duração do fluxo;
+* tempo médio entre pacotes;
+* tamanho médio dos pacotes;
+* quantidade de flags TCP (SYN, ACK, RST, FIN);
+* número de portas diferentes visitadas;
+* taxa de conexões com sucesso ou falha;
+* volume de bytes por segundo.
+
+Essas métricas são mais leves e mais adequadas para um ambiente de monitoramento em rede local e de borda.
+
+FASE 4: CRIAÇÃO DO DATASET PRÓPRIO E TREINAMENTO
+===================================================
+
+Diferentemente de muitas abordagens que dependem de datasets públicos, este projeto terá um dataset próprio, gerado a partir do cenário de testes do laboratório. Essa abordagem é vantajosa, porque o modelo aprende padrões específicos da rede simulada e se torna mais adequado para o contexto estudado.
+
+A etapa de treinamento será realizada em Python, com uso de bibliotecas como pandas, scikit-learn e matplotlib. O algoritmo escolhido será o Decision Tree, por ser interpretável, rápido e adequado para classificação em ambientes com restrições de processamento.
+
+O modelo será treinado para classificar padrões em:
+
+* tráfego benigno;
+* atividade suspeita;
+* ataques de varredura;
+* ataques de inundação;
+* brute force.
+
+FASE 5: MONITORAMENTO, NOTIFICAÇÃO E AVALIAÇÃO
+===============================================
+
+A parte principal da solução será o IDS, que monitorará o tráfego em tempo real e, quando detectar um padrão suspeito, emitirá alertas. Esses alertas podem ser registrados em arquivos de log, exibidos em terminal, enviados para um sistema de notificação local, ou até mesmo enviados por e-mail ou Telegram em uma extensão futura.
+
+A proposta prioriza a detecção e a notificação do incidente, sem foco em ação automática de bloqueio. Essa decisão é estratégica para um projeto acadêmico, pois simplifica a implementação, reduz riscos e mantém o foco na análise e classificação do tráfego. Caso o tempo permitir, a ação de bloqueio pode ser explorada como extensão futura, por meio de regras de firewall ou filtragem de pacotes, mas não será o objetivo principal do trabalho.
+
+A avaliação será feita por meio de métricas como:
+
+* acurácia;
+* precisão;
+* recall;
+* F1-score;
+* matriz de confusão;
+* tempo de inferência;
+* volume de recursos utilizados.
+
+=============================================================================
+5. ARQUITETURA DO PROJETO
+=============================================================================
+
+O projeto será composto por cinco componentes principais:
+
+1. Ambiente de rede virtualizado com Vagrant e Ansible;
+2. geração de tráfego legítimo e malicioso;
+3. captura e extração de métricas de fluxo;
+4. treinamento do modelo de Decision Tree;
+5. módulo de monitoramento e notificação do IDS.
+
+A ideia central é que o roteador, ou um ponto estratégico da rede, capture o tráfego e o encaminhe para processamento por um modelo leve. O sistema então classifica o fluxo e gera um alerta quando o comportamento se aproxima de um ataque, sem depender de inspeção profunda de conteúdo dos pacotes.
+
+=============================================================================
+6. ATAQUES SIMULADOS
+=============================================================================
+
+Para validar a proposta, serão simulados ataques comuns em redes locais, com foco em cenários que sejam simples de reproduzir e mensurar. Os principais ataques serão:
+
+TIPO 1: SYN FLOOD
+──────────────────
+
+Descrição: ataque de negação de serviço em que o atacante envia grande quantidade de requisições SYN sem concluir o handshake.
+
+Padrão esperado: alto volume de pacotes SYN, baixa proporção de ACK, aumento abrupto de conexões incompletas.
+
+TIPO 2: PORT SCAN
+──────────────────
+
+Descrição: varredura de portas para descobrir serviços expostos e portas abertas.
+
+Padrão esperado: grande número de portas diferentes acessadas em curto intervalo de tempo.
+
+TIPO 3: BRUTE FORCE SSH
+────────────────────────
+
+Descrição: tentativa repetida de autenticação em SSH com múltiplas credenciais.
+
+Padrão esperado: múltiplas tentativas de conexão falhas, origem repetida, intervalo de tempo curto e alta frequência de falhas.
+
+=============================================================================
+7. CONSIDERAÇÕES SOBRE BLOQUEIO VERSUS NOTIFICAÇÃO
+=============================================================================
+
+A proposta principal deste trabalho é um IDS de monitoramento e notificação. Esse foco é estratégico porque simplifica a implementação e evita que o projeto fique dependente de regras de firewall complexas ou de ações automáticas que podem interromper o funcionamento da rede sem controle.
+
+A análise e a notificação são suficientes para indicar que há um comportamento suspeito e informar o administrador da rede. Em um cenário real, isso permite que a ação seja tomada de forma consciente, como a investigação do incidente ou a aplicação de bloqueio manual em momento posterior.
+
+Caso haja tempo e disponibilidade para uma extensão do projeto, a funcionalidade de bloqueio pode ser implementada em etapas futuras, por exemplo, usando firewall local ou filtragem via iptables/nftables, mas isso não é o objetivo principal da implementação apresentada neste TCC.
+
+=============================================================================
+8. EXPECTATIVAS E RESULTADOS ESPERADOS
+=============================================================================
+
+Espera-se que a solução seja capaz de distinguir tráfego legítimo de tráfego malicioso com boa acurácia, mantendo um custo computacional aceitável. O modelo de Decision Tree deve apresentar facilidade de interpretação, tempo de inferência baixo e boa aderência ao cenário de rede simulado.
+
+Como resultado esperado, o projeto pretende demonstrar que é possível criar um IDS leve e automatizado, com geração de dataset próprio, uso de métricas de fluxo e aprendizado supervisionado, sem depender de um ambiente muito robusto ou caro.
+
+Além disso, a proposta visa mostrar que a inteligência artificial pode ser aplicada de forma útil para monitoramento de redes, contribuindo para a segurança do ambiente e para a educação em redes de computadores e segurança da informação.
+
+=============================================================================
+9. CONSIDERAÇÕES FINAIS
+=============================================================================
+
+Este trabalho busca unir conceitos de redes de computadores, automação, segurança e Machine Learning em um único projeto acadêmico aplicável ao contexto de redes locais e de borda. A solução proposta é especialmente adequada ao perfil do curso de Redes de Computadores, pois combina infraestrutura de rede, análise de tráfego e segurança em um ambiente controlado e replicável.
+
+A ênfase em monitoramento e notificação torna o projeto mais realista, mais seguro e mais viável para serem executados em um laboratório de graduação. A partir dessa base, o trabalho pode ser ampliada em etapas futuras para incluir bloqueio automático, análise mais detalhada de logs e integração com sistemas de alertas mais sofisticados.

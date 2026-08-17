@@ -1,0 +1,106 @@
+TCC - ANDAMENTO ATUALIZADO
+
+TITULO:
+Desenvolvimento de um Sistema de Detecção de Intrusão Baseado em Machine Learning para Monitoramento e Notificação em Rede Local
+
+ARQUITETURA DA REDE:
+- Cliente Classico 1 (192.168.56.11) - rede externa
+- Cliente Malicioso (192.168.56.66) - rede externa
+- Roteador/IDS (192.168.56.254 / 192.168.57.254) - gateway entre redes
+- Cliente Classico 2 (192.168.57.12) - rede interna
+- Servidor (192.168.57.20) - rede interna
+
+NOTA: IPs do roteador usando .254 para evitar conflito com o host VirtualBox
+que sempre usa .1 nas redes host-only.
+
+REDES:
+- Rede externa: 192.168.56.0/24
+- Rede interna: 192.168.57.0/24
+
+TECNOLOGIA:
+- Vagrant + VirtualBox
+- Ansible (via ansible_local - roda dentro das VMs)
+- Ubuntu Server 22.04
+- Python + Machine Learning (Decision Tree)
+
+ESTADO ATUAL - FASE 1 CONCLUIDA:
+=================================
+
+O ambiente virtual foi criado e provisionado com sucesso no Windows.
+Todas as 5 VMs estao operacionais.
+
+VMs provisionadas:
+- cliente_classico_1: ferramentas de rede + rota para rede interna
+- cliente_malicioso: ferramentas de rede + rota + nmap, hydra, hping3
+- roteador: ferramentas de rede + IP forwarding habilitado
+- cliente_classico_2: ferramentas de rede + rota para rede externa
+- servidor: ferramentas de rede + rota + nginx + SSH
+
+ARQUITETURA DO PROVISIONAMENTO:
+- Provisionador: ansible_local (Ansible instalado e executado dentro de cada VM)
+- Cada VM roda o playbook localmente em si mesma
+- Condicoes 'when' no playbook filtram tarefas por hostname da VM
+- Compativel com Windows e Linux (nao depende de Ansible no host)
+
+TESTES REALIZADOS - FASE 1 VALIDADA:
+======================================
+
+Todos os testes de conectividade e servicos passaram com sucesso.
+
+Conectividade na rede externa:
+- cliente_classico_1 -> cliente_malicioso (56.11 -> 56.66): OK (0% loss)
+- cliente_classico_1 -> roteador WAN (56.11 -> 56.254): OK (0% loss)
+
+Roteamento entre redes (via roteador):
+- cliente_classico_1 -> cliente_classico_2 (56.11 -> 57.12): OK (ttl=63, roteando)
+- cliente_classico_1 -> servidor (56.11 -> 57.20): OK (ttl=63, roteando)
+
+Servicos:
+- nginx no servidor: respondendo HTTP corretamente
+- SSH no servidor: funcionando
+- IP forwarding no roteador: habilitado (valor 1)
+
+Ferramentas instaladas no cliente_malicioso:
+- nmap 7.80
+- hping3 3.0.0-alpha-2
+- hydra 9.2
+
+PROXIMAS ETAPAS:
+================
+
+FASE 2: Geracao de trafego e coleta de dados
+- Gerar trafego legitimo (HTTP, DNS, ICMP)
+- Gerar ataques: SYN Flood, Port Scan, Brute Force SSH
+- Capturar pacotes com tcpdump -> .pcap
+- Converter para fluxos de rede
+
+FASE 3: Extracao de caracteristicas (features)
+- Numero de pacotes por fluxo
+- Duracao do fluxo
+- Tempo medio entre pacotes
+- Tamanho medio dos pacotes
+- Flags TCP (SYN, ACK, RST, FIN)
+- Numero de portas visitadas
+- Taxa de conexoes com sucesso/falha
+- Volume de bytes por segundo
+
+FASE 4: Criacao do dataset proprio e treinamento
+- Dataset proprio gerado no laboratorio (~2500 amostras)
+- Labels: 0=Benigno, 1=SYN_FLOOD, 2=PORT_SCAN, 3=BRUTE_FORCE
+- Treinamento com Decision Tree (scikit-learn)
+- Avaliacao: acuracia, precisao, recall, F1-score
+
+FASE 5: Monitoramento, notificacao e avaliacao
+- IDS em tempo real no roteador
+- Alertas para o administrador
+- Sem foco em bloqueio automatico
+- Metricas: latencia < 10ms, overhead CPU < 15%
+
+CRITERIOS DE VIABILIDADE:
+- Acuracia minima: 85%
+- Precisao media minima: 90%
+- Recall minimo por classe: 80%
+- Falsos positivos: < 5%
+- Tempo de inferencia: < 50ms
+- Memoria do modelo: < 100MB
+- CPU overhead no roteador: < 15%

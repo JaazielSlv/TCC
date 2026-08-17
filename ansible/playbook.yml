@@ -1,0 +1,89 @@
+---
+# Com ansible_local, cada VM roda o playbook localmente.
+# Cada tarefa usa 'when' para executar apenas na VM correta.
+
+- name: Base provisioning
+  hosts: all
+  become: true
+  tasks:
+    - name: Update apt cache
+      ansible.builtin.apt:
+        update_cache: true
+        cache_valid_time: 3600
+
+    - name: Install common network tools
+      ansible.builtin.apt:
+        name:
+          - curl
+          - wget
+          - net-tools
+          - tcpdump
+          - iproute2
+          - iputils-ping
+        state: present
+
+    # --- Rotacao externa -> interna (clientes na rede externa) ---
+    - name: Add route to internal subnet via router
+      ansible.builtin.command: ip route replace {{ int_net_cidr }} via {{ router_wan_ip }}
+      changed_when: true
+      when: "'cliente_classico_1' in inventory_hostname or 'malicioso' in inventory_hostname"
+
+    # --- Rotacao interna -> externa (hosts na rede interna) ---
+    - name: Add route to external subnet via router
+      ansible.builtin.command: ip route replace {{ ext_net_cidr }} via {{ router_lan_ip }}
+      changed_when: true
+      when: "'cliente_classico_2' in inventory_hostname or 'servidor' in inventory_hostname"
+
+    # --- Roteador ---
+    - name: Enable IPv4 forwarding immediately
+      ansible.builtin.command: sysctl -w net.ipv4.ip_forward=1
+      changed_when: true
+      when: "'roteador' in inventory_hostname"
+
+    - name: Persist IPv4 forwarding
+      ansible.builtin.copy:
+        dest: /etc/sysctl.d/99-tcc-router.conf
+        content: |
+          net.ipv4.ip_forward = 1
+        owner: root
+        group: root
+        mode: "0644"
+      when: "'roteador' in inventory_hostname"
+
+    - name: Reload sysctl configuration
+      ansible.builtin.command: sysctl --system
+      changed_when: true
+      when: "'roteador' in inventory_hostname"
+
+    # --- Cliente malicioso ---
+    - name: Install attack and scan packages
+      ansible.builtin.apt:
+        name:
+          - nmap
+          - hydra
+          - hping3
+        state: present
+      when: "'malicioso' in inventory_hostname"
+
+    # --- Servidor ---
+    - name: Install HTTP and SSH services
+      ansible.builtin.apt:
+        name:
+          - nginx
+          - openssh-server
+        state: present
+      when: "'servidor' in inventory_hostname"
+
+    - name: Ensure nginx is running
+      ansible.builtin.service:
+        name: nginx
+        state: started
+        enabled: true
+      when: "'servidor' in inventory_hostname"
+
+    - name: Ensure ssh is running
+      ansible.builtin.service:
+        name: ssh
+        state: started
+        enabled: true
+      when: "'servidor' in inventory_hostname"
