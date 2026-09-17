@@ -22,8 +22,8 @@ Vagrant.configure("2") do |config|
     },
     "roteador" => {
       hostname: "roteador",
-      ram: 1536,
-      cpus: 2,
+      ram: 2048,
+      cpus: 1,
       nics: [
         { ip: "192.168.56.254", netmask: "255.255.255.0" },
         { ip: "192.168.57.254", netmask: "255.255.255.0" }
@@ -37,7 +37,7 @@ Vagrant.configure("2") do |config|
     },
     "servidor" => {
       hostname: "servidor",
-      ram: 1536,
+      ram: 1024,
       cpus: 1,
       nics: [{ ip: "192.168.57.20", netmask: "255.255.255.0" }]
     }

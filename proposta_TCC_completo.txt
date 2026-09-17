@@ -77,13 +77,15 @@ O ambiente será montado utilizando Vagrant e Ansible para automatizar a criaç�
         V                                 V
  [CLIENTE CLASSICO 2 - ALVO]       [SERVIDOR ALVO]
 
-Plano de enderecamento IP da rede interna (192.168.56.0/24):
+Plano de enderecamento IP das redes:
 
-* Roteador (gateway/IDS): 192.168.56.1
+* Rede Externa: 192.168.56.0/24
+* Rede Interna: 192.168.57.0/24
+* Roteador (gateway/IDS): 192.168.56.254 (WAN) / 192.168.57.254 (LAN)
 * Cliente Classico 1: 192.168.56.11
 * Cliente Malicioso: 192.168.56.66
-* Cliente Classico 2 (alvo interno): 192.168.56.12
-* Servidor (alvo de servicos): 192.168.56.20
+* Cliente Classico 2 (alvo interno): 192.168.57.12
+* Servidor (alvo de servicos): 192.168.57.20
 
 As máquinas terão as seguintes funções:
 
@@ -238,7 +240,7 @@ Padrão observado (features):
   └─ Sem resposta ICMP (descarte)
 
 Exemplo comando:
-  hping3 -2 -p 53 -i u1 --flood 192.168.1.20
+  hping3 -2 -p 53 -i u1 --flood 192.168.57.20
 
 =============================================================================
 6. ESTRUTURA E GERAÇÃO DO DATASET PRÓPRIO
@@ -258,21 +260,21 @@ Semana 1-2: TRÁFEGO LEGÍTIMO (~500 amostras)
 
 Semana 3: SYN FLOOD (~800 amostras)
 ────────────────────────────────────
-  └─ hping3 -S -p 80 -i u1 --flood 192.168.1.20
+  └─ hping3 -S -p 80 -i u1 --flood 192.168.57.20
   └─ Duração: 30 minutos ininterruptos
   └─ Capturado em: dataset_synflood.csv
   └─ Total horas máquina: 0.5 horas
 
 Semana 4: PORT SCANNING (~600 amostras)
 ────────────────────────────────────────
-  └─ nmap -sS -p 1-1000 -T4 192.168.1.20
+  └─ nmap -sS -p 1-1000 -T4 192.168.57.20
   └─ Duração: 15 minutos ininterruptos
   └─ Capturado em: dataset_portscan.csv
   └─ Total horas máquina: 0.25 horas
 
 Semana 5: BRUTE FORCE SSH (~500 amostras)
 ──────────────────────────────────────────
-  └─ hydra -l admin -P wordlist.txt -t 4 ssh://192.168.1.20
+  └─ hydra -l admin -P wordlist.txt -t 4 ssh://192.168.57.20
   └─ Duração: 45 minutos ininterruptos
   └─ Capturado em: dataset_bruteforce.csv
   └─ Total horas máquina: 0.75 horas

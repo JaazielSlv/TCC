@@ -20,6 +20,8 @@
           - tcpdump
           - iproute2
           - iputils-ping
+          - dnsutils
+          - openssh-client
         state: present
 
     # --- Rotacao externa -> interna (clientes na rede externa) ---
@@ -35,6 +37,20 @@
       when: "'cliente_classico_2' in inventory_hostname or 'servidor' in inventory_hostname"
 
     # --- Roteador ---
+    - name: Install Python and pip on router
+      ansible.builtin.apt:
+        name:
+          - python3
+          - python3-pip
+        state: present
+      when: "'roteador' in inventory_hostname"
+
+    - name: Install Scapy via pip on router
+      ansible.builtin.pip:
+        name: scapy
+        executable: pip3
+      when: "'roteador' in inventory_hostname"
+
     - name: Enable IPv4 forwarding immediately
       ansible.builtin.command: sysctl -w net.ipv4.ip_forward=1
       changed_when: true
